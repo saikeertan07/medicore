@@ -1,0 +1,82 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: medicore-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-medicore}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?FATAL: POSTGRES_PASSWORD must be configured}
+      POSTGRES_DB: ${POSTGRES_DB:-medicore_db}
+    ports:
+      - "5432:5432"
+    volumes:
+      - medicore_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-medicore} -d ${POSTGRES_DB:-medicore_db}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # Controlled migration step: executes once before application replicas start
+  migration:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: medicore-migration
+    depends_on:
+      db:
+        condition: service_healthy
+    command: ["python", "-m", "app.core.migrations", "--run"]
+    environment:
+      ENVIRONMENT: production
+      DATABASE_ENGINE: postgresql
+      DATABASE_URL: postgresql://${POSTGRES_USER:-medicore}:${POSTGRES_PASSWORD:?FATAL: POSTGRES_PASSWORD must be set}@db:5432/${POSTGRES_DB:-medicore_db}
+      SECRET_KEY: ${SECRET_KEY:?SECRET_KEY must be set}
+    restart: "no"
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: medicore-backend
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      migration:
+        condition: service_completed_successfully
+    environment:
+      ENVIRONMENT: production
+      DATABASE_ENGINE: postgresql
+      DATABASE_URL: postgresql://${POSTGRES_USER:-medicore}:${POSTGRES_PASSWORD:?FATAL: POSTGRES_PASSWORD must be set}@db:5432/${POSTGRES_DB:-medicore_db}
+      SECRET_KEY: ${SECRET_KEY:?SECRET_KEY must be set}
+      ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES:-30}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      AI_PROVIDER: ${AI_PROVIDER:-mock}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-3.8-flash}
+      HOSPITAL_TIMEZONE: ${HOSPITAL_TIMEZONE:-UTC}
+      CORS_ORIGINS: '["http://localhost:3000", "http://127.0.0.1:3000"]'
+    ports:
+      - "8000:8000"
+    volumes:
+      - medicore_uploads:/app/uploads
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: medicore-frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    environment:
+      NEXT_PUBLIC_API_URL: /api/v1
+      INTERNAL_BACKEND_URL: http://backend:8000
+    ports:
+      - "3000:3000"
+
+volumes:
+  medicore_pgdata:
+    driver: local
+  medicore_uploads:
+    driver: local
