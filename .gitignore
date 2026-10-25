@@ -68,5 +68,7 @@ Thumbs.db
 # Local archives and bot logs
 upgrades/
 logs/
+!docs/logs/
+!docs/logs/system_maintenance.log
 .vibe_coder_state.json
 medicore-ai/
