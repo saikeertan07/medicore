@@ -21,6 +21,8 @@ import sys
 # Ensure testing environment unless explicitly configured
 if "ENVIRONMENT" not in os.environ or os.environ["ENVIRONMENT"] == "test":
     os.environ["ENVIRONMENT"] = "testing"
+if "DATABASE_ENGINE" not in os.environ:
+    os.environ["DATABASE_ENGINE"] = "sqlite"
 import json
 import time
 import shutil

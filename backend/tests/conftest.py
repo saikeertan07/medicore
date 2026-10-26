@@ -1,4 +1,6 @@
 import os
+os.environ.setdefault("ENVIRONMENT", "testing")
+os.environ.setdefault("DATABASE_ENGINE", "sqlite")
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine

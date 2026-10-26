@@ -418,7 +418,7 @@ HTML_CONTENT = """<!DOCTYPE html>
     </div>
     <div class="cover-grid-item">
       <div class="cover-grid-label">Primary Author & Architect</div>
-      <div class="cover-grid-val">Sai Keertan &lt;tedlasaikeertan@gmail.com&gt;</div>
+      <div class="cover-grid-val">Saikeertan &lt;tedlasaikeertan@gmail.com&gt;</div>
     </div>
     <div class="cover-grid-item">
       <div class="cover-grid-label">Authenticated GitHub Repository</div>
@@ -1279,7 +1279,7 @@ PROMPT_INJECTION_PATTERNS = [
 <div style="margin-top: 14px; border-top: 2px solid #0f172a; padding-top: 10px; display: flex; justify-content: space-between;">
   <div>
     <strong>Principal Software Architect:</strong><br>
-    Sai Keertan &lt;tedlasaikeertan@gmail.com&gt;<br>
+    Saikeertan &lt;tedlasaikeertan@gmail.com&gt;<br>
     <em>Verified & Signed Electronically</em>
   </div>
   <div style="text-align: right;">
