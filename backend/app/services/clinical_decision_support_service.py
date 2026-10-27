@@ -55,8 +55,187 @@ ALLERGY_CROSS_REACTIVITY = {
     "cephalosporin": ["cefazolin", "ceftriaxone", "cephalexin", "cefepime"]
 }
 
+# Authoritative Renal Dosing Adjustment Guidelines (Cockcroft-Gault CrCl Thresholds)
+KNOWN_RENAL_DOSE_ADJUSTMENTS = [
+    {
+        "drug_key": "metformin",
+        "threshold_crcl": 30.0,
+        "operator": "lt",
+        "severity": "CRITICAL",
+        "title": "Renal Contraindication: Metformin",
+        "description": "Metformin is strictly contraindicated with CrCl < 30 mL/min due to elevated risk of severe lactic acidosis.",
+        "recommendation": "Discontinue metformin immediately; transition to insulin or approved non-renally cleared agent."
+    },
+    {
+        "drug_key": "metformin",
+        "threshold_crcl": 45.0,
+        "operator": "lt",
+        "severity": "HIGH",
+        "title": "Renal Dose Reduction: Metformin",
+        "description": "CrCl is 30-44 mL/min. Metformin clearance is impaired.",
+        "recommendation": "Cap maximum daily dosage at 1000 mg/day (500 mg BID) and monitor eGFR quarterly."
+    },
+    {
+        "drug_key": "enoxaparin",
+        "threshold_crcl": 30.0,
+        "operator": "lt",
+        "severity": "CRITICAL",
+        "title": "Renal Dose Adjustment: Enoxaparin (LMWH)",
+        "description": "Low-molecular-weight heparin clearance depends on renal function. CrCl < 30 mL/min causes drug accumulation.",
+        "recommendation": "Reduce therapeutic dose to 1 mg/kg once daily (instead of q12h) or transition to unfractionated heparin."
+    },
+    {
+        "drug_key": "cefepime",
+        "threshold_crcl": 50.0,
+        "operator": "lt",
+        "severity": "CRITICAL",
+        "title": "Neurotoxicity Warning: Cefepime Renal Impairment",
+        "description": "Failure to adjust cefepime in renal impairment risks severe neurotoxicity, encephalopathy, and status epilepticus.",
+        "recommendation": "Reduce dose or extend dosing interval per renal nomogram (e.g. 1g-2g q24h) and monitor neurological status."
+    },
+    {
+        "drug_key": "vancomycin",
+        "threshold_crcl": 50.0,
+        "operator": "lt",
+        "severity": "HIGH",
+        "title": "Renal Dosing & Trough Alert: Vancomycin",
+        "description": "Vancomycin elimination is prolonged in renal insufficiency, increasing nephrotoxicity risk.",
+        "recommendation": "Extend dosing interval (e.g. q24h-q48h) and mandate therapeutic serum trough concentration monitoring."
+    },
+    {
+        "drug_key": "ciprofloxacin",
+        "threshold_crcl": 30.0,
+        "operator": "lt",
+        "severity": "HIGH",
+        "title": "Renal Dose Adjustment: Ciprofloxacin",
+        "description": "CrCl < 30 mL/min impairs ciprofloxacin elimination.",
+        "recommendation": "Reduce standard oral dose to 250-500 mg every 18-24 hours."
+    }
+]
+
 
 class ClinicalDecisionSupportService:
+    @staticmethod
+    def calculate_creatinine_clearance(
+        age: int,
+        weight_kg: float,
+        serum_creatinine: float,
+        is_female: bool = False
+    ) -> float:
+        """
+        Estimates Creatinine Clearance (CrCl) using the validated Cockcroft-Gault equation:
+        CrCl (mL/min) = [(140 - Age) * Weight(kg)] / [72 * Serum Creatinine(mg/dL)]
+        Multiplied by 0.85 for female patients.
+        """
+        if serum_creatinine <= 0.0 or age <= 0 or weight_kg <= 0.0:
+            return 0.0
+
+        crcl = ((140.0 - float(age)) * float(weight_kg)) / (72.0 * float(serum_creatinine))
+        if is_female:
+            crcl *= 0.85
+        return round(crcl, 1)
+
+    def evaluate_renal_safety(
+        self,
+        db: Session,
+        patient_id: int,
+        candidate_medication: Optional[str] = None,
+        weight_kg: Optional[float] = None
+    ) -> Dict[str, Any]:
+        """
+        Evaluates renal safety profile and medication dosing adjustments based on the
+        patient's latest serum creatinine and calculated Cockcroft-Gault CrCl.
+        """
+        patient = db.query(Patient).filter(Patient.id == patient_id).first()
+        if not patient:
+            raise HTTPException(status_code=404, detail="Patient not found.")
+
+        # Estimate age from date_of_birth if available, else default to 50
+        age = 50
+        if patient.date_of_birth:
+            from datetime import date
+            today = date.today()
+            age = today.year - patient.date_of_birth.year - (
+                (today.month, today.day) < (patient.date_of_birth.month, patient.date_of_birth.day)
+            )
+
+        is_female = (patient.gender or "").lower() in ["female", "f"]
+        patient_weight = weight_kg or 70.0  # Standard reference weight if unrecorded
+
+        # Find latest Serum Creatinine lab result
+        creat_lab = (
+            db.query(LabResult)
+            .filter(
+                LabResult.patient_id == patient_id,
+                LabResult.value.isnot(None)
+            )
+            .order_by(LabResult.created_at.desc())
+            .all()
+        )
+
+        serum_creat_val = None
+        for lab in creat_lab:
+            test_name = (lab.order_item.test_definition.name if lab.order_item and lab.order_item.test_definition else "").lower()
+            if "creatinine" in test_name:
+                try:
+                    serum_creat_val = float(lab.value)
+                    break
+                except (ValueError, TypeError):
+                    continue
+
+        crcl = None
+        if serum_creat_val and serum_creat_val > 0.0:
+            crcl = self.calculate_creatinine_clearance(
+                age=age,
+                weight_kg=patient_weight,
+                serum_creatinine=serum_creat_val,
+                is_female=is_female
+            )
+
+        # Gather medications to evaluate
+        med_names = []
+        active_prescriptions = db.query(Prescription).filter(Prescription.patient_id == patient_id).all()
+        for p in active_prescriptions:
+            if isinstance(p.medications, list):
+                for m in p.medications:
+                    if isinstance(m, dict) and "name" in m:
+                        med_names.append(m["name"].lower().strip())
+                    elif isinstance(m, str):
+                        med_names.append(m.lower().strip())
+            elif p.medication_name:
+                med_names.append(p.medication_name.lower().strip())
+
+        if candidate_medication:
+            med_names.append(candidate_medication.lower().strip())
+
+        renal_alerts = []
+        if crcl is not None:
+            for rule in KNOWN_RENAL_DOSE_ADJUSTMENTS:
+                drug_key = rule["drug_key"]
+                if any(drug_key in m for m in med_names):
+                    threshold = rule["threshold_crcl"]
+                    if crcl < threshold:
+                        renal_alerts.append({
+                            "category": "RENAL_DOSE_ADJUSTMENT",
+                            "severity": rule["severity"],
+                            "title": rule["title"],
+                            "description": f"{rule['description']} (Patient CrCl: {crcl} mL/min, threshold: <{threshold} mL/min).",
+                            "recommendation": rule["recommendation"],
+                            "rule_type": "DETERMINISTIC_EVIDENCE_BASED"
+                        })
+
+        return {
+            "patient_id": patient.id,
+            "patient_name": patient.display_name,
+            "estimated_age": age,
+            "gender": "Female" if is_female else "Male",
+            "weight_kg": patient_weight,
+            "serum_creatinine": serum_creat_val,
+            "estimated_crcl_ml_min": crcl,
+            "renal_impairment_detected": (crcl is not None and crcl < 60.0),
+            "renal_alerts": renal_alerts,
+            "total_renal_alerts": len(renal_alerts)
+        }
     def evaluate_clinical_safety(
         self,
         db: Session,
@@ -118,7 +297,22 @@ class ClinicalDecisionSupportService:
                             "rule_type": "DETERMINISTIC_EVIDENCE_BASED"
                         })
 
-        # 4. Check Abnormal Laboratory Biomarkers
+        # 4. Check Renal Function & Medication Dosing Adjustments
+        renal_profile = self.evaluate_renal_safety(
+            db=db,
+            patient_id=patient_id,
+            candidate_medication=candidate_medication
+        )
+        if renal_profile.get("renal_alerts"):
+            deterministic_alerts.extend(renal_profile["renal_alerts"])
+        if renal_profile.get("estimated_crcl_ml_min") is not None:
+            crcl_val = renal_profile["estimated_crcl_ml_min"]
+            if crcl_val < 60.0:
+                probabilistic_suggestions.append(
+                    f"Renal insufficiency detected: Cockcroft-Gault CrCl is {crcl_val} mL/min. Monitor nephrotoxic medications."
+                )
+
+        # 5. Check Abnormal Laboratory Biomarkers
         critical_labs = db.query(LabResult).filter(
             LabResult.patient_id == patient_id,
             LabResult.abnormal_flag.in_([AbnormalFlag.CRITICAL, AbnormalFlag.HIGH, AbnormalFlag.LOW])
