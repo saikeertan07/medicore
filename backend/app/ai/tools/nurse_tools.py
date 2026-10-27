@@ -132,3 +132,30 @@ def get_acls_guidance(rhythm: str, cpr_cycle: int = 1) -> Dict[str, Any]:
         amiodarone_doses_given=0
     )
     return guidance
+
+
+def evaluate_sepsis_risk(
+    patient_id: int,
+    systolic_bp: int,
+    heart_rate: int,
+    respiration_rate: int,
+    temperature: float,
+    altered_mentation: bool = False,
+    suspected_infection_source: Optional[str] = None,
+    serum_lactate: Optional[float] = None
+) -> Dict[str, Any]:
+    """
+    Evaluates Sepsis 3.0, quick SOFA (qSOFA), SIRS criteria, and triggers the Surviving Sepsis 1-Hour Bundle.
+    """
+    from app.services.sepsis_engine import SepsisProtocolEngine
+    return SepsisProtocolEngine.evaluate_sepsis_protocol(
+        patient_id=patient_id,
+        systolic_bp=systolic_bp,
+        heart_rate=heart_rate,
+        respiration_rate=respiration_rate,
+        temperature=temperature,
+        altered_mentation=altered_mentation,
+        suspected_infection_source=suspected_infection_source,
+        serum_lactate=serum_lactate
+    )
+

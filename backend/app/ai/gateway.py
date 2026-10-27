@@ -49,7 +49,7 @@ ROLE_TOOL_PERMISSIONS: Dict[UserRole, List[str]] = {
         "record_vitals", "triage", "telemetry", "blood_bank",
         "lab_sample", "sbar_handover", "acls_resuscitation",
         "calculate_triage_score", "get_nurse_triage_queue",
-        "draft_sbar_handover", "get_acls_guidance"
+        "draft_sbar_handover", "get_acls_guidance", "evaluate_sepsis_risk"
     ],
     UserRole.PHARMACIST: [
         "drug_interaction", "pharmacy_dispense", "tpn_nutrition", "chemo_safety"
