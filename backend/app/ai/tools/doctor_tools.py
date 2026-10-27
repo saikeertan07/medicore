@@ -140,3 +140,53 @@ def get_patient_prescriptions(db: Session, current_user: User, patient_id: int) 
         "prescriptions": rx_list
     }
 
+def evaluate_patient_cds_safety(
+    db: Session,
+    current_user: User,
+    patient_id: int,
+    candidate_medication: Optional[str] = None
+) -> Dict[str, Any]:
+    """
+    Evaluates clinical decision support safety checks (drug-drug, drug-allergy, abnormal labs, renal dosing)
+    for an authorized physician attending to the patient.
+    """
+    auth_error = verify_doctor_patient_authorization(db, current_user, patient_id)
+    if auth_error:
+        return {"error": auth_error, "authorized": False}
+
+    from app.services.clinical_decision_support_service import clinical_decision_support_service
+    result = clinical_decision_support_service.evaluate_clinical_safety(
+        db=db,
+        clinician=current_user,
+        patient_id=patient_id,
+        candidate_medication=candidate_medication
+    )
+    result["authorized"] = True
+    return result
+
+def evaluate_patient_renal_safety(
+    db: Session,
+    current_user: User,
+    patient_id: int,
+    candidate_medication: Optional[str] = None,
+    weight_kg: Optional[float] = None
+) -> Dict[str, Any]:
+    """
+    Evaluates renal drug dosing adjustments and Cockcroft-Gault creatinine clearance
+    for an authorized physician attending to the patient.
+    """
+    auth_error = verify_doctor_patient_authorization(db, current_user, patient_id)
+    if auth_error:
+        return {"error": auth_error, "authorized": False}
+
+    from app.services.clinical_decision_support_service import clinical_decision_support_service
+    result = clinical_decision_support_service.evaluate_renal_safety(
+        db=db,
+        patient_id=patient_id,
+        candidate_medication=candidate_medication,
+        weight_kg=weight_kg
+    )
+    result["authorized"] = True
+    return result
+
+

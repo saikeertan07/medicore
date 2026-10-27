@@ -42,7 +42,8 @@ ROLE_TOOL_PERMISSIONS: Dict[UserRole, List[str]] = {
         "soap_note", "triage", "radiology", "discharge", "surgical_clearance",
         "chemo_safety", "acls_resuscitation", "sepsis_protocol",
         "get_patient_prescriptions", "summarize_patient_history",
-        "summarize_document", "search_hospital_clinical_guidelines"
+        "summarize_document", "search_hospital_clinical_guidelines",
+        "evaluate_cds_safety", "evaluate_renal_safety"
     ],
     UserRole.NURSE: [
         "record_vitals", "triage", "telemetry", "blood_bank",
