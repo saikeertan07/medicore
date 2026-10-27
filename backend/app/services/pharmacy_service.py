@@ -156,6 +156,22 @@ class PharmacySafetyEngine:
                 "severity": InteractionSeverity.MAJOR.value,
                 "message": f"NSAIDs should be avoided in severe renal impairment (eGFR {egfr} < 30 mL/min/1.73m²); risk of acute decompensation."
             }
+        # Enoxaparin (LMWH) accumulation in renal failure
+        if target in ("enoxaparin", "lovenox") and egfr < 30.0:
+            return {
+                "drug": proposed_drug,
+                "egfr": egfr,
+                "severity": InteractionSeverity.MAJOR.value,
+                "message": f"Enoxaparin clearance is impaired in severe renal impairment (eGFR {egfr} < 30 mL/min/1.73m²). Dose reduction to 1 mg/kg once daily is required."
+            }
+        # Cefepime neurotoxicity risk
+        if target == "cefepime" and egfr < 50.0:
+            return {
+                "drug": proposed_drug,
+                "egfr": egfr,
+                "severity": InteractionSeverity.MAJOR.value,
+                "message": f"Cefepime requires renal dose reduction when eGFR is {egfr} < 50 mL/min/1.73m² to prevent drug-induced encephalopathy."
+            }
         return None
 
     @classmethod

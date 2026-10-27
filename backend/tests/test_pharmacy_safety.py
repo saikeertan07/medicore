@@ -92,3 +92,29 @@ def test_renal_contraindication():
     assert res["renal_contraindication"] is not None
     assert res["renal_contraindication"]["severity"] == InteractionSeverity.CONTRAINDICATED.value
     assert "lactic acidosis" in res["renal_contraindication"]["message"]
+
+def test_enoxaparin_and_cefepime_renal_adjustments():
+    # Enoxaparin with eGFR < 30 requires dose reduction warning
+    res_enox = PharmacySafetyEngine.evaluate_prescription_safety(
+        proposed_drug="Enoxaparin",
+        dosage="80mg SC q12h",
+        active_medications=[],
+        patient_allergies=[],
+        egfr=25.0
+    )
+    assert res_enox["verdict"] == PrescribeStatus.WARNING_OVERRIDABLE.value
+    assert res_enox["renal_contraindication"] is not None
+    assert "Enoxaparin clearance is impaired" in res_enox["renal_contraindication"]["message"]
+
+    # Cefepime with eGFR < 50 requires dose adjustment warning
+    res_cef = PharmacySafetyEngine.evaluate_prescription_safety(
+        proposed_drug="Cefepime",
+        dosage="2g IV q8h",
+        active_medications=[],
+        patient_allergies=[],
+        egfr=40.0
+    )
+    assert res_cef["verdict"] == PrescribeStatus.WARNING_OVERRIDABLE.value
+    assert res_cef["renal_contraindication"] is not None
+    assert "encephalopathy" in res_cef["renal_contraindication"]["message"].lower()
+
