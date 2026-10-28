@@ -18,26 +18,45 @@ from app.services.acls_resuscitation_service import ACLSResuscitationEngine, Rhy
 def calculate_triage_score(vitals: Dict[str, Any]) -> Dict[str, Any]:
     """
     Computes standard NEWS2 (National Early Warning Score 2) and clinical urgency escalation.
+    Includes Royal College of Physicians guidelines with supplemental oxygen and hypercapnic scale support.
     """
-    score = triage_ai_service.calculate_news2(vitals)
+    normalized_vitals = dict(vitals or {})
+    # Normalize common clinical oxygen and COPD parameter synonyms from conversational AI
+    if "on_o2" in normalized_vitals or "o2_therapy" in normalized_vitals or "o2_support" in normalized_vitals:
+        normalized_vitals["supplemental_oxygen"] = bool(
+            normalized_vitals.get("on_o2") or normalized_vitals.get("o2_therapy") or normalized_vitals.get("o2_support")
+        )
+    if "copd" in normalized_vitals or "hypercapnia" in normalized_vitals or "hypercapnic" in normalized_vitals:
+        normalized_vitals["copd_scale_2"] = bool(
+            normalized_vitals.get("copd") or normalized_vitals.get("hypercapnia") or normalized_vitals.get("hypercapnic")
+        )
+
+    score = triage_ai_service.calculate_news2(normalized_vitals)
     if score >= 7:
         acuity = "CRITICAL / LEVEL 1"
         action = "Immediate emergency medical response. Notify Attending Physician and Intensive Care Team."
+        escalate_rrt = True
     elif score >= 5:
         acuity = "URGENT / LEVEL 2"
         action = "Urgent clinical review required within 30 minutes. Continuous monitoring indicated."
+        escalate_rrt = True
     elif score >= 1:
         acuity = "LOW / LEVEL 3"
         action = "Routine inpatient nursing observations. Repeat vitals in 4-6 hours."
+        escalate_rrt = False
     else:
         acuity = "NORMAL / LEVEL 4"
         action = "Baseline parameters stable. Standard monitoring protocol."
+        escalate_rrt = False
 
     return {
         "news2_score": score,
         "acuity_level": acuity,
+        "rapid_response_team_indicated": escalate_rrt,
         "clinical_action": action,
-        "vitals_analyzed": vitals
+        "supplemental_oxygen_considered": bool(normalized_vitals.get("supplemental_oxygen", False)),
+        "copd_scale_2_applied": bool(normalized_vitals.get("copd_scale_2", False)),
+        "vitals_analyzed": normalized_vitals
     }
 
 
