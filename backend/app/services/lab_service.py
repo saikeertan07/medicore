@@ -18,6 +18,32 @@ from app.schemas.schemas import (
 )
 from app.services.audit_service import record_audit_log
 
+# Authoritative Critical Laboratory Panic Value Nomograms
+CRITICAL_PANIC_THRESHOLDS: Dict[str, Dict[str, float]] = {
+    "potassium": {"low_critical": 2.8, "high_critical": 6.2},
+    "sodium": {"low_critical": 120.0, "high_critical": 160.0},
+    "glucose": {"low_critical": 45.0, "high_critical": 450.0},
+    "platelet": {"low_critical": 20.0, "high_critical": 1000.0},
+    "hemoglobin": {"low_critical": 6.0, "high_critical": 20.0},
+    "troponin": {"high_critical": 0.04},
+    "lactate": {"high_critical": 4.0},
+}
+
+def detect_critical_panic_flag(test_name: Optional[str], numeric_val: Optional[float], current_flag: AbnormalFlag) -> AbnormalFlag:
+    """Evaluates whether measured numeric value breaches hospital critical panic thresholds."""
+    if current_flag == AbnormalFlag.CRITICAL or numeric_val is None or not test_name:
+        return current_flag
+
+    norm_name = test_name.lower().strip()
+    for drug_key, limits in CRITICAL_PANIC_THRESHOLDS.items():
+        if drug_key in norm_name:
+            if "low_critical" in limits and numeric_val < limits["low_critical"]:
+                return AbnormalFlag.CRITICAL
+            if "high_critical" in limits and numeric_val > limits["high_critical"]:
+                return AbnormalFlag.CRITICAL
+
+    return current_flag
+
 
 def generate_lab_order_number(db: Session) -> str:
     """Generates a collision-resistant server-side order number: LAB-YYYYMM-XXXXXX"""
@@ -528,6 +554,12 @@ def enter_result(
     unit_snapshot = entry_data.unit if entry_data.unit is not None else (test_def.default_unit if test_def else None)
     ref_range_snapshot = entry_data.reference_range if entry_data.reference_range is not None else (test_def.default_reference_range if test_def else None)
 
+    effective_flag = detect_critical_panic_flag(
+        test_name=test_def.name if test_def else None,
+        numeric_val=entry_data.numeric_value,
+        current_flag=entry_data.abnormal_flag
+    )
+
     entered_result = db.query(LabResult).filter(
         LabResult.lab_order_item_id == item_id,
         LabResult.status == LabResultStatus.ENTERED
@@ -538,7 +570,7 @@ def enter_result(
         entered_result.numeric_value = entry_data.numeric_value
         entered_result.unit = unit_snapshot
         entered_result.reference_range = ref_range_snapshot
-        entered_result.abnormal_flag = entry_data.abnormal_flag
+        entered_result.abnormal_flag = effective_flag
         entered_result.comments = entry_data.comments
         entered_result.entered_by_id = current_user.id
         entered_result.entered_at = utc_now()
@@ -551,7 +583,7 @@ def enter_result(
             numeric_value=entry_data.numeric_value,
             unit=unit_snapshot,
             reference_range=ref_range_snapshot,
-            abnormal_flag=entry_data.abnormal_flag,
+            abnormal_flag=effective_flag,
             status=LabResultStatus.ENTERED,
             comments=entry_data.comments,
             entered_by_id=current_user.id,
@@ -722,6 +754,14 @@ def amend_result(
     original.amendment_reason = amend_data.amendment_reason
     original.amended_at = utc_now()
 
+    item = original.order_item
+    test_def = item.test_definition if item else None
+    effective_amend_flag = detect_critical_panic_flag(
+        test_name=test_def.name if test_def else None,
+        numeric_val=amend_data.numeric_value,
+        current_flag=amend_data.abnormal_flag
+    )
+
     v2 = LabResult(
         lab_order_item_id=original.lab_order_item_id,
         patient_id=original.patient_id,
@@ -729,7 +769,7 @@ def amend_result(
         numeric_value=amend_data.numeric_value,
         unit=amend_data.unit if amend_data.unit is not None else original.unit,
         reference_range=amend_data.reference_range if amend_data.reference_range is not None else original.reference_range,
-        abnormal_flag=amend_data.abnormal_flag,
+        abnormal_flag=effective_amend_flag,
         status=LabResultStatus.FINAL,
         comments=amend_data.comments,
         parent_result_id=original.id,
