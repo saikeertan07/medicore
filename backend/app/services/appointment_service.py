@@ -466,12 +466,16 @@ def cancel_appointment(
     if appointment.status == AppointmentStatus.CANCELLED:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Appointment is already cancelled.")
 
-    if appointment.status == AppointmentStatus.COMPLETED:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot cancel an appointment that has already been completed.")
+    if appointment.status in [AppointmentStatus.COMPLETED, AppointmentStatus.NO_SHOW]:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Cannot cancel an appointment that has already been {appointment.status.value}."
+        )
 
+    clean_reason = cancellation_reason.strip() if cancellation_reason else None
     appointment.status = AppointmentStatus.CANCELLED
-    if cancellation_reason:
-        appointment.notes = f"{appointment.notes or ''}\nCancelled: {cancellation_reason}".strip()
+    if clean_reason:
+        appointment.notes = f"{appointment.notes or ''}\nCancelled: {clean_reason}".strip()
 
     db.commit()
     db.refresh(appointment)
@@ -503,7 +507,7 @@ def cancel_appointment(
             user_id=current_user.id,
             details={
                 "appointment_number": appointment.appointment_number,
-                "cancellation_reason": cancellation_reason
+                "cancellation_reason": clean_reason or "N/A"
             },
             ip_address=ip_address
         )
