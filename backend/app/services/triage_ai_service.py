@@ -29,15 +29,43 @@ class TriageAIService:
             elif 9 <= rr <= 11:
                 score += 1
 
-        # SpO2 Scale 1 (%)
+        # Supplemental Oxygen (Air or Oxygen?) - RCP NEWS2 standard (+2 if receiving supplemental O2)
+        on_oxygen = bool(vitals.get("supplemental_oxygen", vitals.get("on_oxygen", False)))
+        if on_oxygen:
+            score += 2
+
+        # SpO2 Scoring: Standard Scale 1 vs Hypercapnic Respiratory Failure Scale 2 (e.g. COPD)
         spo2 = vitals.get("oxygen_saturation")
+        is_hypercapnic = bool(vitals.get("hypercapnic_failure", vitals.get("copd_scale_2", False)))
+
         if spo2 is not None:
-            if spo2 <= 91:
-                score += 3
-            elif 92 <= spo2 <= 93:
-                score += 2
-            elif 94 <= spo2 <= 95:
-                score += 1
+            if is_hypercapnic:
+                # Scale 2: Target 88-92%
+                if spo2 <= 83:
+                    score += 3
+                elif 84 <= spo2 <= 85:
+                    score += 2
+                elif 86 <= spo2 <= 87:
+                    score += 1
+                elif 88 <= spo2 <= 92:
+                    score += 0
+                elif 93 <= spo2 <= 94:
+                    if on_oxygen:
+                        score += 1
+                elif 95 <= spo2 <= 96:
+                    if on_oxygen:
+                        score += 2
+                elif spo2 >= 97:
+                    if on_oxygen:
+                        score += 3
+            else:
+                # Standard Scale 1
+                if spo2 <= 91:
+                    score += 3
+                elif 92 <= spo2 <= 93:
+                    score += 2
+                elif 94 <= spo2 <= 95:
+                    score += 1
 
         # Systolic BP (mmHg)
         sbp = vitals.get("blood_pressure_systolic")
