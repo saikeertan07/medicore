@@ -11,8 +11,9 @@ from app.services.blood_bank_service import BloodBankEngine
 router = APIRouter(prefix="/blood-bank", tags=["Blood Bank & Massive Transfusion Protocol"])
 
 class CompatibilityCheckRequest(BaseModel):
-    recipient_type: str = Field(..., description="e.g. O_POS, A_NEG, B_POS, AB_POS")
-    donor_unit_type: str = Field(..., description="e.g. O_NEG, O_POS, A_POS")
+    recipient_type: str = Field(..., description="e.g. O_POS, A_NEG, B_POS, AB_POS, O+, A-")
+    donor_unit_type: str = Field(..., description="e.g. O_NEG, O_POS, A_POS, O-, AB+")
+    product_type: Optional[str] = Field(default="RBC", description="'RBC' for packed red cells or 'PLASMA' for Fresh Frozen Plasma")
 
 class EmergencyUncrossmatchedRequest(BaseModel):
     patient_id: int
@@ -27,8 +28,16 @@ class MTPCoolerRequest(BaseModel):
 
 @router.post("/check-compatibility")
 def check_transfusion_compatibility(req: CompatibilityCheckRequest) -> Dict[str, Any]:
-    """Verifies immunohematology compatibility between donor unit and recipient."""
+    """Verifies immunohematology compatibility between donor unit and recipient for RBCs or FFP."""
+    prod = (req.product_type or "RBC").strip().upper()
+    if prod in ["PLASMA", "FFP"]:
+        return BloodBankEngine.check_plasma_compatibility(req.recipient_type, req.donor_unit_type)
     return BloodBankEngine.check_rbc_compatibility(req.recipient_type, req.donor_unit_type)
+
+@router.post("/check-plasma-compatibility")
+def check_plasma_compatibility_route(req: CompatibilityCheckRequest) -> Dict[str, Any]:
+    """Dedicated endpoint verifying Fresh Frozen Plasma (FFP) compatibility."""
+    return BloodBankEngine.check_plasma_compatibility(req.recipient_type, req.donor_unit_type)
 
 @router.post("/emergency-release")
 def request_emergency_uncrossmatched_blood(req: EmergencyUncrossmatchedRequest) -> Dict[str, Any]:

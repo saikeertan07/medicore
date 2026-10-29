@@ -66,6 +66,19 @@ RBC_COMPATIBILITY = {
     ]
 }
 
+# Fresh Frozen Plasma (FFP) Compatibility Table (Recipient -> Compatible Donors)
+# AB is the universal plasma donor (no ABO antibodies in plasma); O is the universal plasma recipient.
+PLASMA_COMPATIBILITY = {
+    BloodType.O_NEG: [BloodType.O_NEG, BloodType.O_POS, BloodType.A_NEG, BloodType.A_POS, BloodType.B_NEG, BloodType.B_POS, BloodType.AB_NEG, BloodType.AB_POS],
+    BloodType.O_POS: [BloodType.O_NEG, BloodType.O_POS, BloodType.A_NEG, BloodType.A_POS, BloodType.B_NEG, BloodType.B_POS, BloodType.AB_NEG, BloodType.AB_POS],
+    BloodType.A_NEG: [BloodType.A_NEG, BloodType.A_POS, BloodType.AB_NEG, BloodType.AB_POS],
+    BloodType.A_POS: [BloodType.A_NEG, BloodType.A_POS, BloodType.AB_NEG, BloodType.AB_POS],
+    BloodType.B_NEG: [BloodType.B_NEG, BloodType.B_POS, BloodType.AB_NEG, BloodType.AB_POS],
+    BloodType.B_POS: [BloodType.B_NEG, BloodType.B_POS, BloodType.AB_NEG, BloodType.AB_POS],
+    BloodType.AB_NEG: [BloodType.AB_NEG, BloodType.AB_POS],
+    BloodType.AB_POS: [BloodType.AB_NEG, BloodType.AB_POS]
+}
+
 class BloodBankEngine:
     @classmethod
     def check_rbc_compatibility(cls, recipient_type: str, donor_unit_type: str) -> Dict[str, Any]:
@@ -75,11 +88,28 @@ class BloodBankEngine:
 
         is_compatible = (donor in RBC_COMPATIBILITY[rec])
         return {
+            "product_type": "PACKED_RED_BLOOD_CELLS",
             "recipient_blood_type": rec.value,
             "donor_unit_blood_type": donor.value,
             "is_compatible": is_compatible,
             "action": "APPROVED_FOR_CROSSMATCH" if is_compatible else "CONTRAINDICATED_HEMOLYTIC_TRANSFUSION_RISK",
             "warning": None if is_compatible else f"FATAL ERROR: Transfusing {donor.value} to {rec.value} will cause acute hemolytic transfusion reaction."
+        }
+
+    @classmethod
+    def check_plasma_compatibility(cls, recipient_type: str, donor_unit_type: str) -> Dict[str, Any]:
+        """Checks if a donor FFP/plasma unit is safe for recipient (AB is universal donor, O is universal recipient)."""
+        rec = normalize_blood_type(recipient_type)
+        donor = normalize_blood_type(donor_unit_type)
+
+        is_compatible = (donor in PLASMA_COMPATIBILITY[rec])
+        return {
+            "product_type": "FRESH_FROZEN_PLASMA",
+            "recipient_blood_type": rec.value,
+            "donor_unit_blood_type": donor.value,
+            "is_compatible": is_compatible,
+            "action": "APPROVED_FOR_TRANSFUSION" if is_compatible else "CONTRAINDICATED_PASSIVE_ANTIBODY_HEMOLYSIS",
+            "warning": None if is_compatible else f"FATAL ERROR: Transfusing {donor.value} plasma to {rec.value} recipient risks severe passive ABO antibody hemolysis."
         }
 
     @classmethod
