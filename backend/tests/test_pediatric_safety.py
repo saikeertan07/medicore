@@ -64,3 +64,26 @@ def test_broselow_explicit_weight():
     assert "80 Joules" in result["electrical_therapy"]["defibrillation_subsequent"]
     # Fluid bolus = 20 mL/kg = 400 mL
     assert result["fluid_resuscitation"]["bolus_volume_ml"] == 400
+
+def test_pediatric_dextrose_hypoglycemia_resuscitation():
+    # Infant < 10kg receives D10W (5 mL/kg)
+    infant_req = PediatricEmergencyRequest(patient_id="ped-infant", actual_weight_kg=6.0)
+    infant_res = PediatricSafetyService.calculate_pediatric_dosing(infant_req)
+    dex_infant = infant_res["emergency_medications"]["dextrose_hypoglycemia_bolus"]
+    assert "D10W" in dex_infant["solution"]
+    assert dex_infant["volume_ml"] == 30.0  # 5 mL/kg * 6 kg = 30 mL
+
+    # Child 20kg receives D25W (2 mL/kg)
+    child_req = PediatricEmergencyRequest(patient_id="ped-child", actual_weight_kg=20.0)
+    child_res = PediatricSafetyService.calculate_pediatric_dosing(child_req)
+    dex_child = child_res["emergency_medications"]["dextrose_hypoglycemia_bolus"]
+    assert "D25W" in dex_child["solution"]
+    assert dex_child["volume_ml"] == 40.0  # 2 mL/kg * 20 kg = 40 mL
+
+    # Adolescent 40kg receives D50W (1 mL/kg capped at 50 mL)
+    adol_req = PediatricEmergencyRequest(patient_id="ped-adol", actual_weight_kg=40.0)
+    adol_res = PediatricSafetyService.calculate_pediatric_dosing(adol_req)
+    dex_adol = adol_res["emergency_medications"]["dextrose_hypoglycemia_bolus"]
+    assert "D50W" in dex_adol["solution"]
+    assert dex_adol["volume_ml"] == 40.0
+

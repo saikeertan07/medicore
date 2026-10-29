@@ -19,9 +19,9 @@ class APGARAssessment(BaseModel):
 
 class PediatricEmergencyRequest(BaseModel):
     patient_id: str
-    age_months: Optional[int] = None
-    length_cm: Optional[float] = None
-    actual_weight_kg: Optional[float] = None
+    age_months: Optional[int] = Field(None, ge=0, le=240, description="Age in months (0-240)")
+    length_cm: Optional[float] = Field(None, gt=0, le=220.0, description="Length/height in cm (0-220)")
+    actual_weight_kg: Optional[float] = Field(None, gt=0, le=150.0, description="Actual measured weight in kg (0-150)")
     indication: Optional[str] = "Cardiac Arrest / Anaphylaxis / Resuscitation"
 
 class PediatricSafetyService:
@@ -147,6 +147,29 @@ class PediatricSafetyService:
         # Fluid Bolus (Isotonic saline): 20 mL/kg over 10-20 min (10 mL/kg for cardiogenic shock / DKA)
         fluid_bolus_ml = int(round(min(20 * weight, 1000)))
 
+        # Hypoglycemia Resuscitation (Pediatric Rule of 50s: % Dextrose x mL/kg = 50 -> 0.5 g/kg dextrose)
+        if weight < 10.0:
+            dextrose_dose = {
+                "solution": "D10W (10% Dextrose in Water)",
+                "volume_ml": round(min(5.0 * weight, 100.0), 1),
+                "dose_rule": "5 mL/kg of D10W (0.5 g/kg dextrose)",
+                "route": "IV/IO slow push over 2-3 minutes; recheck blood glucose at 15 minutes"
+            }
+        elif weight <= 30.0:
+            dextrose_dose = {
+                "solution": "D25W (25% Dextrose in Water)",
+                "volume_ml": round(min(2.0 * weight, 60.0), 1),
+                "dose_rule": "2 mL/kg of D25W (0.5 g/kg dextrose)",
+                "route": "IV/IO slow push; recheck blood glucose at 15 minutes"
+            }
+        else:
+            dextrose_dose = {
+                "solution": "D50W (50% Dextrose in Water)",
+                "volume_ml": round(min(1.0 * weight, 50.0), 1),
+                "dose_rule": "1 mL/kg of D50W (max 50 mL, 0.5 g/kg dextrose)",
+                "route": "IV/IO slow push; recheck blood glucose at 15 minutes"
+            }
+
         # Normal vital sign ranges for weight/age
         if weight < 10:
             expected_hr = "100 - 160 bpm"
@@ -192,7 +215,8 @@ class PediatricSafetyService:
                 "atropine": {
                     "dose_mg": round(max(0.1, min(0.02 * weight, 0.5)), 2),
                     "indication": "Symptomatic bradycardia"
-                }
+                },
+                "dextrose_hypoglycemia_bolus": dextrose_dose
             },
             "electrical_therapy": {
                 "defibrillation_initial": f"{defib_initial_joules} Joules (2 J/kg)",
