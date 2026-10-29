@@ -16,6 +16,41 @@ class BloodType(str, Enum):
     AB_NEG = "AB_NEG"
     AB_POS = "AB_POS"
 
+BLOOD_TYPE_SYNONYMS: Dict[str, BloodType] = {
+    "O+": BloodType.O_POS, "O-": BloodType.O_NEG,
+    "O POS": BloodType.O_POS, "O NEG": BloodType.O_NEG,
+    "O_POS": BloodType.O_POS, "O_NEG": BloodType.O_NEG,
+    "O POSITIVE": BloodType.O_POS, "O NEGATIVE": BloodType.O_NEG,
+    "A+": BloodType.A_POS, "A-": BloodType.A_NEG,
+    "A POS": BloodType.A_POS, "A NEG": BloodType.A_NEG,
+    "A_POS": BloodType.A_POS, "A_NEG": BloodType.A_NEG,
+    "A POSITIVE": BloodType.A_POS, "A NEGATIVE": BloodType.A_NEG,
+    "B+": BloodType.B_POS, "B-": BloodType.B_NEG,
+    "B POS": BloodType.B_POS, "B NEG": BloodType.B_NEG,
+    "B_POS": BloodType.B_POS, "B_NEG": BloodType.B_NEG,
+    "B POSITIVE": BloodType.B_POS, "B NEGATIVE": BloodType.B_NEG,
+    "AB+": BloodType.AB_POS, "AB-": BloodType.AB_NEG,
+    "AB POS": BloodType.AB_POS, "AB NEG": BloodType.AB_NEG,
+    "AB_POS": BloodType.AB_POS, "AB_NEG": BloodType.AB_NEG,
+    "AB POSITIVE": BloodType.AB_POS, "AB NEGATIVE": BloodType.AB_NEG,
+}
+
+def normalize_blood_type(raw_val: str) -> BloodType:
+    """Normalizes colloquial and clinical blood type notations to authoritative BloodType Enum."""
+    cleaned = raw_val.strip().upper().replace(" ", "_")
+    if cleaned in BLOOD_TYPE_SYNONYMS:
+        return BLOOD_TYPE_SYNONYMS[cleaned]
+    # Check with spaces restored
+    with_spaces = raw_val.strip().upper()
+    if with_spaces in BLOOD_TYPE_SYNONYMS:
+        return BLOOD_TYPE_SYNONYMS[with_spaces]
+    try:
+        return BloodType(cleaned)
+    except ValueError:
+        raise ValueError(
+            f"Invalid blood type '{raw_val}'. Accepted values: O+, O-, A+, A-, B+, B-, AB+, AB- (or O_POS, O_NEG, etc.)"
+        )
+
 # Packed Red Blood Cell (pRBC) Compatibility Table (Recipient -> Compatible Donors)
 RBC_COMPATIBILITY = {
     BloodType.O_NEG: [BloodType.O_NEG],
@@ -35,8 +70,8 @@ class BloodBankEngine:
     @classmethod
     def check_rbc_compatibility(cls, recipient_type: str, donor_unit_type: str) -> Dict[str, Any]:
         """Checks if a donor pRBC unit is immunologically safe to transfuse to recipient."""
-        rec = BloodType(recipient_type.strip().upper())
-        donor = BloodType(donor_unit_type.strip().upper())
+        rec = normalize_blood_type(recipient_type)
+        donor = normalize_blood_type(donor_unit_type)
 
         is_compatible = (donor in RBC_COMPATIBILITY[rec])
         return {
