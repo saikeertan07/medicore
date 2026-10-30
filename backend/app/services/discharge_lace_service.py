@@ -31,6 +31,60 @@ class DischargeSummaryInput(BaseModel):
     lace_input: Optional[LACEAssessmentInput] = None
 
 class DischargeLACEService:
+    CHARLSON_COMORBIDITY_WEIGHTS: Dict[str, int] = {
+        "myocardial_infarction": 1,
+        "congestive_heart_failure": 1,
+        "peripheral_vascular_disease": 1,
+        "cerebrovascular_disease": 1,
+        "dementia": 1,
+        "chronic_pulmonary_disease": 1,
+        "connective_tissue_disease": 1,
+        "peptic_ulcer_disease": 1,
+        "mild_liver_disease": 1,
+        "diabetes_uncomplicated": 1,
+        "diabetes_end_organ_damage": 2,
+        "hemiplegia": 2,
+        "moderate_to_severe_renal_disease": 2,
+        "solid_tumor": 2,
+        "leukemia": 2,
+        "lymphoma": 2,
+        "moderate_to_severe_liver_disease": 3,
+        "metastatic_solid_tumor": 6,
+        "aids_hiv": 6
+    }
+
+    @classmethod
+    def calculate_charlson_comorbidity_index(cls, conditions: List[str]) -> Dict[str, Any]:
+        """Calculates authoritative Charlson Comorbidity Index with clinical hierarchy deduplication."""
+        matched_dict = {}
+        normalized_conditions = [c.lower().strip().replace(" ", "_").replace("-", "_") for c in conditions]
+
+        for condition_key, weight in cls.CHARLSON_COMORBIDITY_WEIGHTS.items():
+            if any(condition_key == nc or condition_key in nc for nc in normalized_conditions):
+                matched_dict[condition_key] = weight
+
+        # Hierarchy exclusions:
+        # 1. Metastatic solid tumor (6) supersedes localized solid tumor (2)
+        if "metastatic_solid_tumor" in matched_dict and "solid_tumor" in matched_dict:
+            del matched_dict["solid_tumor"]
+
+        # 2. Severe liver disease (3) supersedes mild liver disease (1)
+        if "moderate_to_severe_liver_disease" in matched_dict and "mild_liver_disease" in matched_dict:
+            del matched_dict["mild_liver_disease"]
+
+        # 3. Diabetes with end organ damage (2) supersedes uncomplicated diabetes (1)
+        if "diabetes_end_organ_damage" in matched_dict and "diabetes_uncomplicated" in matched_dict:
+            del matched_dict["diabetes_uncomplicated"]
+
+        total_score = sum(matched_dict.values())
+        matched_conditions = [{"condition": k, "weight": v} for k, v in matched_dict.items()]
+
+        return {
+            "charlson_score": total_score,
+            "matched_conditions": matched_conditions,
+            "condition_count": len(matched_conditions)
+        }
+
     @classmethod
     def calculate_lace_score(cls, data: LACEAssessmentInput) -> Dict[str, Any]:
         # L - Length of stay
@@ -112,6 +166,8 @@ class DischargeLACEService:
             "max_lace_score": 19,
             "risk_category": risk_category,
             "estimated_30day_readmission_rate": estimated_readmission_rate,
+            "high_risk_transition_flag": total_lace >= 10,
+            "complex_case_management_referral_mandate": total_lace >= 14,
             "component_breakdown": {
                 "length_of_stay_points": l_points,
                 "acuity_points": a_points,

@@ -60,3 +60,26 @@ def test_discharge_summary_generation():
     assert packet["lace_risk_assessment"]["total_lace_score"] == 7 # LOS 3(3) + Acute(3) + Charlson 1(1) + ED 0 = 7
     assert packet["lace_risk_assessment"]["risk_category"] == "MODERATE_RISK"
     assert len(packet["emergency_return_precautions"]) >= 3
+
+def test_charlson_comorbidity_calculation():
+    conditions = ["Congestive Heart Failure", "Diabetes End Organ Damage", "Metastatic Solid Tumor"]
+    res = DischargeLACEService.calculate_charlson_comorbidity_index(conditions)
+    # CHF(1) + DM with end organ(2) + Metastatic Tumor(6) = 9
+    assert res["charlson_score"] == 9
+    assert res["condition_count"] == 3
+
+def test_lace_very_high_risk_mandate():
+    # LOS = 15 days (7 pt), Acute (3 pt), Charlson = 4 (5 pt), ED visits = 3 (3 pt) -> Total = 18 pt
+    data = LACEAssessmentInput(
+        patient_id="pt-104",
+        length_of_stay_days=15,
+        is_acute_admission=True,
+        charlson_comorbidity_score=4,
+        ed_visits_past_6_months=3
+    )
+    result = DischargeLACEService.calculate_lace_score(data)
+    assert result["total_lace_score"] == 18
+    assert result["risk_category"] == "HIGH_RISK"
+    assert result["high_risk_transition_flag"] is True
+    assert result["complex_case_management_referral_mandate"] is True
+
