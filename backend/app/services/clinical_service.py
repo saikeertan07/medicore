@@ -53,20 +53,20 @@ def validate_vitals_values(vitals_data: VitalsCreate) -> None:
     if vitals_data.systolic_bp is not None and vitals_data.diastolic_bp is not None:
         if vitals_data.systolic_bp <= vitals_data.diastolic_bp:
             raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail=f"Systolic blood pressure ({vitals_data.systolic_bp}) must be greater than diastolic blood pressure ({vitals_data.diastolic_bp})."
             )
         pulse_pressure = vitals_data.systolic_bp - vitals_data.diastolic_bp
         if pulse_pressure < 10:
             raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail=f"Physiologically invalid pulse pressure ({pulse_pressure} mmHg). Difference between systolic and diastolic must be at least 10 mmHg."
             )
 
     if vitals_data.oxygen_saturation is not None:
         if vitals_data.oxygen_saturation > 100.0 or vitals_data.oxygen_saturation < 40.0:
             raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail=f"Oxygen saturation ({vitals_data.oxygen_saturation}%) is outside valid clinical measurement range (40.0% - 100.0%)."
             )
 
