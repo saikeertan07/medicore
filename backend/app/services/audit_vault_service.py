@@ -39,9 +39,10 @@ class AuditVault:
         action: str,
         resource: str,
         resource_id: str,
-        details: Optional[Dict[str, Any]] = None
+        details: Optional[Dict[str, Any]] = None,
+        db: Optional[Any] = None
     ) -> AuditEntry:
-        """Appends a new cryptographically chained audit record."""
+        """Appends a new cryptographically chained audit record, optionally mirroring to database."""
         prev_hash = self.chain[-1].entry_hash if self.chain else self._genesis_hash
         timestamp = datetime.now(timezone.utc).isoformat()
         event_details = details or {}
@@ -60,6 +61,27 @@ class AuditVault:
             entry_hash=entry_hash
         )
         self.chain.append(entry)
+
+        if db is not None:
+            try:
+                from app.models.models import AuditLog
+                log_entry = AuditLog(
+                    user_id=user_id,
+                    action=action,
+                    resource_type=resource,
+                    resource_id=resource_id,
+                    details={
+                        **event_details,
+                        "vault_entry_id": entry.entry_id,
+                        "vault_previous_hash": prev_hash,
+                        "vault_entry_hash": entry_hash
+                    }
+                )
+                db.add(log_entry)
+                db.commit()
+            except Exception:
+                pass
+
         return entry
 
     def record_break_glass_access(
@@ -67,7 +89,8 @@ class AuditVault:
         user_id: int,
         user_role: str,
         patient_id: int,
-        emergency_justification: str
+        emergency_justification: str,
+        db: Optional[Any] = None
     ) -> AuditEntry:
         """High-priority emergency break-glass event recording."""
         return self.record_event(
@@ -80,7 +103,8 @@ class AuditVault:
                 "urgency": "LIFE_THREATENING_EMERGENCY",
                 "justification": emergency_justification,
                 "compliance_alert_triggered": True
-            }
+            },
+            db=db
         )
 
     def verify_ledger_integrity(self) -> Dict[str, Any]:
