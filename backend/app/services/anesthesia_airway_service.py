@@ -21,8 +21,17 @@ class AirwayEvaluationRequest(BaseModel):
     has_airway_obstruction: bool = Field(False, description="Tumor, peritonsillar abscess, stridor, Ludwig's angina, neck hematoma")
     limited_neck_mobility: bool = Field(False, description="C-spine collar, cervical spine fusion, rheumatoid arthritis")
     prior_difficult_intubation_history: bool = Field(False, description="Patient or family history of difficult intubation or 'cannot intubate cannot oxygenate'")
+    fasting_hours: Optional[float] = Field(None, ge=0.0, le=72.0, description="Hours of pre-operative fasting")
+    last_intake_type: Optional[str] = Field("light_meal", description="'clear_liquids', 'breast_milk', 'infant_formula', 'light_meal', or 'heavy_meal'")
 
 class AnesthesiaAirwayService:
+    ASA_NPO_MINIMUM_HOURS: Dict[str, float] = {
+        "clear_liquids": 2.0,
+        "breast_milk": 4.0,
+        "infant_formula": 6.0,
+        "light_meal": 6.0,
+        "heavy_meal": 8.0
+    }
     @classmethod
     def evaluate_airway(cls, req: AirwayEvaluationRequest) -> Dict[str, Any]:
         lemon_score = 0
@@ -93,6 +102,20 @@ class AnesthesiaAirwayService:
                 "Standard stylet and suction."
             ]
 
+        npo_assessment = None
+        if req.fasting_hours is not None:
+            intake_key = (req.last_intake_type or "light_meal").lower().strip().replace(" ", "_")
+            required_hours = cls.ASA_NPO_MINIMUM_HOURS.get(intake_key, 6.0)
+            is_npo_compliant = req.fasting_hours >= required_hours
+            npo_assessment = {
+                "fasting_hours_recorded": req.fasting_hours,
+                "intake_type": intake_key,
+                "required_minimum_hours": required_hours,
+                "npo_guidelines_met": is_npo_compliant,
+                "aspiration_risk": not is_npo_compliant,
+                "aspiration_mitigation": None if is_npo_compliant else "Full stomach / aspiration precaution: Execute Rapid Sequence Induction (RSI) with cuffed ETT or postpone elective surgery."
+            }
+
         return {
             "patient_id": req.patient_id,
             "lemon_score": lemon_score,
@@ -102,5 +125,6 @@ class AnesthesiaAirwayService:
             "mallampati_class": req.mallampati_class,
             "mallampati_description": mallampati_descriptions[req.mallampati_class],
             "identified_risk_criteria": risk_factors,
-            "asa_airway_equipment_readiness": equipment_plan
+            "asa_airway_equipment_readiness": equipment_plan,
+            "npo_fasting_assessment": npo_assessment
         }

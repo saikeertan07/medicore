@@ -38,3 +38,32 @@ def test_airway_critical_difficult():
     assert "video laryngoscope" in plan_text.lower()
     assert "bougie" in plan_text.lower()
     assert "cricothyrotomy" in plan_text.lower()
+
+def test_airway_npo_fasting_compliance():
+    # 8 hours fasting after light meal -> compliant
+    req_compliant = AirwayEvaluationRequest(
+        patient_id="anes-003",
+        mallampati_class=1,
+        fasting_hours=8.0,
+        last_intake_type="light_meal"
+    )
+    res_compliant = AnesthesiaAirwayService.evaluate_airway(req_compliant)
+    npo = res_compliant["npo_fasting_assessment"]
+    assert npo is not None
+    assert npo["npo_guidelines_met"] is True
+    assert npo["aspiration_risk"] is False
+
+    # 3 hours fasting after heavy meal -> non-compliant (requires 8h)
+    req_non_compliant = AirwayEvaluationRequest(
+        patient_id="anes-004",
+        mallampati_class=2,
+        fasting_hours=3.0,
+        last_intake_type="heavy_meal"
+    )
+    res_non_compliant = AnesthesiaAirwayService.evaluate_airway(req_non_compliant)
+    npo_fail = res_non_compliant["npo_fasting_assessment"]
+    assert npo_fail is not None
+    assert npo_fail["npo_guidelines_met"] is False
+    assert npo_fail["aspiration_risk"] is True
+    assert "Rapid Sequence Induction" in npo_fail["aspiration_mitigation"]
+
