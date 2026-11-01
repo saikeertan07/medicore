@@ -16,6 +16,7 @@ from app.models.models import (
 )
 from app.main import app
 from app.core.migrations import run_step2_migrations, run_step3_migrations
+from app.core.datetime_utils import utc_now
 
 TEST_DATABASE_URL = os.getenv("TEST_PG_URL", "sqlite:///:memory:")
 
@@ -239,7 +240,7 @@ def setup_step3_data(db_session):
         end_time=time(10, 30),
         type=AppointmentType.IN_PERSON,
         status=AppointmentStatus.CHECKED_IN,
-        check_in_time=datetime.utcnow(),
+        check_in_time=utc_now(),
         reason="Persistent joint pain and fever"
     )
     db_session.add(appt)

@@ -17,6 +17,7 @@ from app.models.models import (
 )
 from app.main import app
 from app.core.migrations import run_step2_migrations, run_step3_migrations, run_step4_migrations
+from app.core.datetime_utils import utc_now
 
 TEST_DATABASE_URL = os.getenv("TEST_PG_URL", "sqlite:///:memory:")
 
@@ -254,7 +255,7 @@ def setup_step4_data(db_session):
         attending_doctor_id=doc1.id,
         department_id=gen_dept.id,
         status=EncounterStatus.IN_PROGRESS,
-        started_at=datetime.utcnow()
+        started_at=utc_now()
     )
     db_session.add(enc)
 

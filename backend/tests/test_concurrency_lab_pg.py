@@ -18,6 +18,7 @@ from app.core.security import get_password_hash
 from app.schemas.schemas import ResultVerifyIn, SampleCollectIn, ResultAmendIn
 from app.services.lab_service import verify_result, collect_sample, amend_result
 from app.core.migrations import run_step2_migrations, run_step3_migrations, run_step4_migrations
+from app.core.datetime_utils import utc_now
 
 PG_URL = os.getenv("TEST_PG_URL", "postgresql://medicore:medicore_secure_pass@localhost:5432/medicore_db")
 
@@ -122,8 +123,8 @@ def test_concurrent_result_verification_row_lock(pg_engine):
             patient_id=patient.id,
             sample_type="Whole Blood",
             status=LabSampleStatus.RECEIVED,
-            collected_at=datetime.utcnow(),
-            received_at=datetime.utcnow()
+            collected_at=utc_now(),
+            received_at=utc_now()
         )
         setup_db.add(sample)
         setup_db.commit()
@@ -147,7 +148,7 @@ def test_concurrent_result_verification_row_lock(pg_engine):
             abnormal_flag=AbnormalFlag.NORMAL,
             status=LabResultStatus.ENTERED,
             entered_by_id=doc1_user.id,
-            entered_at=datetime.utcnow()
+            entered_at=utc_now()
         )
         setup_db.add(result)
         setup_db.commit()
@@ -304,8 +305,8 @@ def test_concurrent_result_amendment_invariants(pg_engine):
             patient_id=patient.id,
             sample_type="Plasma",
             status=LabSampleStatus.RECEIVED,
-            collected_at=datetime.utcnow(),
-            received_at=datetime.utcnow()
+            collected_at=utc_now(),
+            received_at=utc_now()
         )
         setup_db.add(sample)
         setup_db.commit()
@@ -330,9 +331,9 @@ def test_concurrent_result_amendment_invariants(pg_engine):
             abnormal_flag=AbnormalFlag.NORMAL,
             status=LabResultStatus.FINAL,
             entered_by_id=doc1_user.id,
-            entered_at=datetime.utcnow(),
+            entered_at=utc_now(),
             verified_by_id=doc1_user.id,
-            verified_at=datetime.utcnow()
+            verified_at=utc_now()
         )
         setup_db.add(result)
         setup_db.commit()
