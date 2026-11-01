@@ -105,9 +105,15 @@ class AIGateway:
                     self.provider_status = "UNAVAILABLE"
                     return
                 try:
-                    import google.generativeai as genai
-                    genai.configure(api_key=settings.GEMINI_API_KEY)
-                    self.genai = genai
+                    try:
+                        from google import genai
+                        self.genai_client = genai.Client(api_key=settings.GEMINI_API_KEY)
+                        self.genai = None
+                    except ImportError:
+                        import google.generativeai as legacy_genai
+                        legacy_genai.configure(api_key=settings.GEMINI_API_KEY)
+                        self.genai = legacy_genai
+                        self.genai_client = None
                     self.provider_status = "INITIALIZED"
                     logger.info(f"Gemini production provider initialized with model {self.model_name}")
                 except Exception as e:
@@ -125,9 +131,15 @@ class AIGateway:
                     self.provider_status = "SIMULATED"
                     return
                 try:
-                    import google.generativeai as genai
-                    genai.configure(api_key=settings.GEMINI_API_KEY)
-                    self.genai = genai
+                    try:
+                        from google import genai
+                        self.genai_client = genai.Client(api_key=settings.GEMINI_API_KEY)
+                        self.genai = None
+                    except ImportError:
+                        import google.generativeai as legacy_genai
+                        legacy_genai.configure(api_key=settings.GEMINI_API_KEY)
+                        self.genai = legacy_genai
+                        self.genai_client = None
                     self.provider_status = "INITIALIZED"
                 except Exception:
                     self.provider = "mock"
@@ -298,11 +310,19 @@ class AIGateway:
         # 5. Call Genuine Provider (Gemini)
         if self.provider == "gemini" and settings.GEMINI_API_KEY and self.provider_status == "INITIALIZED":
             try:
-                model = self.genai.GenerativeModel(self.model_name)
-                response = model.generate_content(composed_prompt)
-                raw_output = response.text
-                completion_tokens = len(raw_output.split()) * 2
-                output_type = "GENUINE_MODEL_OUTPUT"
+                if getattr(self, "genai_client", None) is not None:
+                    response = self.genai_client.models.generate_content(
+                        model=self.model_name,
+                        contents=composed_prompt
+                    )
+                    raw_output = response.text
+                elif getattr(self, "genai", None) is not None:
+                    model = self.genai.GenerativeModel(self.model_name)
+                    response = model.generate_content(composed_prompt)
+                    raw_output = response.text
+                if raw_output:
+                    completion_tokens = len(raw_output.split()) * 2
+                    output_type = "GENUINE_MODEL_OUTPUT"
             except Exception as e:
                 logger.error(f"Gemini API invocation error: {e}.")
                 raw_output = None

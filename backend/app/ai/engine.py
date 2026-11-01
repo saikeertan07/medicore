@@ -41,9 +41,15 @@ class AIEngine:
                     "Silent fallback to mock is strictly disabled."
                 )
             try:
-                import google.generativeai as genai
-                genai.configure(api_key=settings.GEMINI_API_KEY)
-                self.genai = genai
+                try:
+                    from google import genai
+                    self.genai_client = genai.Client(api_key=settings.GEMINI_API_KEY)
+                    self.genai = None
+                except ImportError:
+                    import google.generativeai as legacy_genai
+                    legacy_genai.configure(api_key=settings.GEMINI_API_KEY)
+                    self.genai = legacy_genai
+                    self.genai_client = None
                 logger.info(f"Gemini AI Engine successfully initialized with model {self.model_name}")
             except Exception as e:
                 logger.error(f"FATAL: Failed to initialize Gemini API with model {self.model_name}: {e}")
